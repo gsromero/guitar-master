@@ -1,50 +1,54 @@
 ---
 interface Props {
-  targetId: string;
+  targetId?: string;
 }
 const { targetId } = Astro.props;
 ---
 
-<div class="flex items-center gap-1" role="group" aria-label="Número de colunas">
-  {[1, 2, 3].map(n => (
-    <button
-      class="coluna-btn w-8 h-8 rounded border border-gray-300 text-sm font-mono text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors aria-pressed:bg-blue-600 aria-pressed:text-white aria-pressed:border-blue-600"
-      data-cols={n}
-      data-target={targetId}
-      aria-pressed="false"
-      title={`${n} coluna${n > 1 ? 's' : ''}`}
-    >
-      {n}
-    </button>
-  ))}
+<div class="ctrl-group" role="group" aria-label="Número de colunas">
+  <span class="ctrl-label">Colunas</span>
+  <div class="col-btns">
+    {[1, 2, 3].map(n => (
+      <button
+        class="btn col-btn"
+        data-cols={n}
+        data-target={targetId}
+        aria-pressed="false"
+        type="button"
+        title={`${n} coluna${n > 1 ? 's' : ''}`}
+      >
+        {n}
+      </button>
+    ))}
+  </div>
 </div>
+
+<style>
+  .col-btns {
+    display: flex;
+    gap: 2px;
+  }
+  .col-btn {
+    min-width: 2rem;
+    padding: 0.35rem 0.55rem;
+  }
+</style>
 
 <script>
   const STORAGE_KEY = 'gm:colunas';
 
   function apply(n: number) {
-    document.querySelectorAll<HTMLElement>('.coluna-btn').forEach(btn => {
-      const pressed = Number(btn.dataset['cols']) === n;
-      btn.setAttribute('aria-pressed', String(pressed));
+    document.querySelectorAll<HTMLElement>('.col-btn').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(Number(btn.dataset['cols']) === n));
     });
-
-    document.querySelectorAll<HTMLElement>('[data-cols-target]').forEach(el => {
-      el.style.setProperty('--colunas', String(n));
-    });
-
-    // Also target any cifra-container on the page
-    document.querySelectorAll<HTMLElement>('.cifra-container').forEach(el => {
-      el.style.setProperty('--colunas', String(n));
-    });
-
     localStorage.setItem(STORAGE_KEY, String(n));
+    document.dispatchEvent(new CustomEvent('gm:cols-change', { detail: n }));
   }
 
-  // Restore persisted value
   const stored = Number(localStorage.getItem(STORAGE_KEY) ?? '1');
   apply(stored);
 
-  document.querySelectorAll<HTMLElement>('.coluna-btn').forEach(btn => {
+  document.querySelectorAll<HTMLElement>('.col-btn').forEach(btn => {
     btn.addEventListener('click', () => apply(Number(btn.dataset['cols'])));
   });
 </script>

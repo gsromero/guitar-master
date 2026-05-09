@@ -1,8 +1,6 @@
 ---
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
-import { ChordsOverWordsParser } from 'chordsheetjs';
-import AcordeTooltip from './AcordeTooltip.astro';
 
 interface Props {
   rawCifra: string;
@@ -15,153 +13,264 @@ const chordSvgs: Record<string, string> = existsSync(jsonPath)
   ? (JSON.parse(readFileSync(jsonPath, 'utf-8')) as Record<string, string>)
   : {};
 
-const parser = new ChordsOverWordsParser();
-const song = parser.parse(rawCifra.trim());
+const CHORD_TOKEN = /^[A-G][b#]?(?:maj|min|m|dim|aug|sus|add|°|º|ø)?\d*(?:[b#]\d+)?(?:\([^)]+\))?(?:\/[A-G][b#]?)?$/;
+const CHORD_FIND = /\b[A-G][b#]?(?:maj|min|m|dim|aug|sus|add|°|º|ø)?\d*(?:[b#]\d+)?(?:\([^)]+\))?(?:\/[A-G][b#]?)?\b/g;
 
-type Pair = { chord: string; lyric: string };
-type ParsedLine =
-  | { kind: 'section'; label: string }
-  | { kind: 'empty' }
-  | { kind: 'content'; pairs: Pair[] };
+type ChordPos = { c: string; col: number };
+type Line =
+  | { type: 'cifra'; chords: ChordPos[]; lyric: string }
+  | { type: 'chords-only'; chords: ChordPos[] }
+  | { type: 'lyric-only'; lyric: string };
+type Section = { header: string; lines: Line[] };
 
-// Classify each line
-const parsedLines: ParsedLine[] = song.lines.map(line => {
-  const pairs: Pair[] = line.items
-    .filter((item): item is typeof item & { chords: string; lyrics: string } => 'chords' in item)
-    .map(item => ({
-      chord: typeof item.chords === 'string' ? item.chords : String(item.chords ?? ''),
-      lyric: typeof item.lyrics === 'string' ? item.lyrics : String(item.lyrics ?? ''),
-    }));
+function classifyLine(line: string): 'empty' | 'section' | 'chord' | 'lyric' {
+  const trimmed = line.trim();
+  if (!trimmed) return 'empty';
+  if (/^\[.+\]$/.test(trimmed)) return 'section';
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.length === 0) return 'empty';
+  const chordCount = tokens.filter(t => CHORD_TOKEN.test(t)).length;
+  return chordCount / tokens.length >= 0.6 ? 'chord' : 'lyric';
+}
 
-  const hasContent = pairs.some(p => p.chord.trim() !== '' || p.lyric.trim() !== '');
-  if (!hasContent) return { kind: 'empty' };
-
-  // Section marker: single pair, no chord, lyric is [Something]
-  if (
-    pairs.length === 1 &&
-    pairs[0] !== undefined &&
-    pairs[0].chord.trim() === '' &&
-    /^\[.+\]$/.test(pairs[0].lyric.trim())
-  ) {
-    return { kind: 'section', label: pairs[0].lyric.trim().slice(1, -1) };
+function extractPositions(line: string): ChordPos[] {
+  const out: ChordPos[] = [];
+  let m: RegExpExecArray | null;
+  CHORD_FIND.lastIndex = 0;
+  while ((m = CHORD_FIND.exec(line)) !== null) {
+    if (CHORD_TOKEN.test(m[0])) {
+      out.push({ c: m[0], col: m.index });
+    }
   }
+  return out;
+}
 
-  return { kind: 'content', pairs };
-});
+const rawLines = rawCifra.replace(/\r/g, '').split('\n');
+const sections: Section[] = [];
+let current: Section | null = null;
+let pending: ChordPos[] | null = null;
 
-// Group content lines into stanzas
-type Block =
-  | { kind: 'section'; label: string }
-  | { kind: 'stanza'; lines: Pair[][] }
-  | { kind: 'gap' };
-
-const blocks: Block[] = [];
-let currentStanza: Pair[][] = [];
-
-function flushStanza() {
-  if (currentStanza.length > 0) {
-    blocks.push({ kind: 'stanza', lines: [...currentStanza] });
-    currentStanza = [];
+function ensureSection() {
+  if (!current) {
+    current = { header: '', lines: [] };
+    sections.push(current);
+  }
+}
+function flushPending() {
+  if (pending) {
+    ensureSection();
+    current!.lines.push({ type: 'chords-only', chords: pending });
+    pending = null;
   }
 }
 
-for (const line of parsedLines) {
-  if (line.kind === 'content') {
-    currentStanza.push(line.pairs);
+for (const line of rawLines) {
+  const kind = classifyLine(line);
+  if (kind === 'section') {
+    flushPending();
+    current = { header: line.trim(), lines: [] };
+    sections.push(current);
+  } else if (kind === 'empty') {
+    flushPending();
+  } else if (kind === 'chord') {
+    flushPending();
+    pending = extractPositions(line);
   } else {
-    flushStanza();
-    if (line.kind === 'section') blocks.push({ kind: 'section', label: line.label });
-    else if (blocks.length > 0 && blocks[blocks.length - 1]?.kind !== 'gap') {
-      blocks.push({ kind: 'gap' });
+    ensureSection();
+    if (pending) {
+      current!.lines.push({ type: 'cifra', chords: pending, lyric: line.replace(/\s+$/, '') });
+      pending = null;
+    } else {
+      current!.lines.push({ type: 'lyric-only', lyric: line.replace(/\s+$/, '') });
     }
   }
 }
-flushStanza();
+flushPending();
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderChordLineHTML(chords: ChordPos[]): string {
+  let html = '', col = 0;
+  for (const { c, col: target } of chords) {
+    while (col < target) { html += ' '; col++; }
+    const safe = escHtml(c);
+    html += `<span class="chord" data-chord="${safe}">${safe}</span>`;
+    col += c.length;
+  }
+  return html;
+}
+
+const dataPayload = JSON.stringify({ sections, chordSvgs });
 ---
 
-<div class="cifra-container" style="column-count: var(--colunas, 1); column-gap: 2.5rem;">
-  {blocks.map(block => {
-    if (block.kind === 'section') {
-      return (
-        <div class="section-header">{block.label}</div>
-      );
-    }
-    if (block.kind === 'gap') {
-      return <div class="stanza-gap" />;
-    }
-    // stanza
-    return (
-      <div class="stanza">
-        {block.lines.map(pairs => (
-          <div class="cifra-line">
-            {pairs.map(pair => (
-              <span class="pair">
-                <span class="chord-span">
-                  {pair.chord.trim()
-                    ? <AcordeTooltip chord={pair.chord.trim()} svg={chordSvgs[pair.chord.trim()]} />
-                    : pair.chord
-                  }
-                </span>
-                <span class="lyric-span">{pair.lyric}</span>
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  })}
+<div class="cifra-wrap">
+  <div id="cifra-columns" class="cifra-columns" style="--num-cols: 1">
+    <div class="cifra-column">
+      {sections.map(sec => (
+        <div class="cifra-section-block">
+          {sec.header && <div class="cifra-header">{sec.header}</div>}
+          {sec.lines.map(line => {
+            if (line.type === 'cifra') {
+              return (
+                <>
+                  <div class="cifra-line chord-line" set:html={renderChordLineHTML(line.chords)} />
+                  <div class="cifra-line lyric-line">{line.lyric}</div>
+                </>
+              );
+            }
+            if (line.type === 'chords-only') {
+              return (
+                <>
+                  <div class="cifra-line chord-line" set:html={renderChordLineHTML(line.chords)} />
+                  <div class="cifra-line spacer" />
+                </>
+              );
+            }
+            return <div class="cifra-line lyric-line">{line.lyric}</div>;
+          })}
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <div id="chord-tooltip" class="chord-tooltip" role="tooltip" aria-hidden="true">
+    <div class="tooltip-name" id="tooltip-name"></div>
+    <div class="tooltip-diagram" id="tooltip-diagram"></div>
+  </div>
+
+  <script id="cifra-data" type="application/json" set:html={dataPayload} />
 </div>
 
+<script>
+  type ChordPos = { c: string; col: number };
+  type Section = { header: string; lines: any[] };
+  type Payload = { sections: Section[]; chordSvgs: Record<string, string> };
+
+  const root = document.getElementById('cifra-columns');
+  const dataScript = document.getElementById('cifra-data');
+  if (!root || !dataScript) throw new Error('cifra: missing root');
+
+  const payload: Payload = JSON.parse(dataScript.textContent || '{}');
+  const chordSvgs = payload.chordSvgs || {};
+
+  // Capture initial section blocks (server-rendered)
+  let sectionBlocks: HTMLElement[] = Array.from(root.querySelectorAll<HTMLElement>('.cifra-section-block'));
+
+  function sectionWeight(el: HTMLElement): number {
+    return el.querySelectorAll('.cifra-line').length + 3;
+  }
+
+  function distribute(n: number): HTMLElement[][] {
+    if (n <= 1) return [sectionBlocks.slice()];
+    const weights = sectionBlocks.map(sectionWeight);
+    const total = weights.reduce((a, b) => a + b, 0);
+    const target = total / n;
+    const cols: HTMLElement[][] = Array.from({ length: n }, () => []);
+    let col = 0, acc = 0;
+    sectionBlocks.forEach((sec, i) => {
+      if (col < n - 1 && acc > 0 && acc + weights[i]! / 2 > target) {
+        col++;
+        acc = 0;
+      }
+      cols[col]!.push(sec);
+      acc += weights[i]!;
+    });
+    return cols;
+  }
+
+  function applyColumns(n: number) {
+    if (!root) return;
+    root.style.setProperty('--num-cols', String(n));
+    const groups = distribute(n);
+    // Clear root, but keep the section blocks alive
+    root.innerHTML = '';
+    groups.forEach(group => {
+      if (group.length === 0) return;
+      const col = document.createElement('div');
+      col.className = 'cifra-column';
+      group.forEach(s => col.appendChild(s));
+      root.appendChild(col);
+    });
+  }
+
+  // Listen to column change events from ColunaToggle
+  document.addEventListener('gm:cols-change', ((e: CustomEvent<number>) => {
+    applyColumns(e.detail);
+  }) as EventListener);
+
+  // Apply initial column setting from localStorage
+  const initialCols = Number(localStorage.getItem('gm:colunas') ?? '1');
+  if (initialCols > 1) applyColumns(initialCols);
+
+  // Tooltip
+  const tooltip = document.getElementById('chord-tooltip');
+  const tipName = document.getElementById('tooltip-name');
+  const tipDiagram = document.getElementById('tooltip-diagram');
+  let hideTimer: number | null = null;
+
+  function showTooltip(chordEl: HTMLElement) {
+    if (!tooltip || !tipName || !tipDiagram) return;
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    const name = chordEl.dataset['chord'] || '';
+    tipName.textContent = name;
+    const svg = chordSvgs[name];
+    tipDiagram.innerHTML = svg
+      ? svg
+      : '<div style="font-size:0.75rem;color:var(--ink-soft);font-style:italic;padding:0.5rem;">sem diagrama</div>';
+    tooltip.classList.add('visible');
+    tooltip.setAttribute('aria-hidden', 'false');
+  }
+
+  function positionTooltip(clientX: number, clientY: number) {
+    if (!tooltip) return;
+    const tw = tooltip.offsetWidth || 120;
+    const th = tooltip.offsetHeight || 170;
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    let left = clientX + scrollX + 14;
+    let top = clientY + scrollY + 14;
+    if (clientX + tw + 24 > window.innerWidth) left = clientX + scrollX - tw - 14;
+    if (clientY + th + 24 > window.innerHeight) top = clientY + scrollY - th - 14;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+  }
+
+  function hideTooltipSoon() {
+    if (!tooltip) return;
+    hideTimer = window.setTimeout(() => {
+      tooltip.classList.remove('visible');
+      tooltip.setAttribute('aria-hidden', 'true');
+    }, 80);
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const target = e.target as HTMLElement;
+    const chord = target.closest<HTMLElement>('.chord');
+    if (chord) {
+      showTooltip(chord);
+      positionTooltip(e.clientX, e.clientY);
+    }
+  });
+  document.addEventListener('mousemove', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('.chord')) positionTooltip(e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const target = e.target as HTMLElement;
+    const related = e.relatedTarget as HTMLElement | null;
+    if (target.closest('.chord') && (!related || !related.closest('.chord'))) {
+      hideTooltipSoon();
+    }
+  });
+</script>
+
 <style>
-  .cifra-container {
-    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
-    font-size: 0.8rem;
-    line-height: 1.15;
-    overflow-x: auto;
-  }
-
-  .section-header {
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #9ca3af;
-    margin-top: 0.5rem;
-    margin-bottom: 0.2rem;
-    break-after: avoid;
-  }
-
-  .stanza-gap {
-    height: 0.85rem;
-  }
-
-  .stanza {
-    break-inside: avoid;
-    display: block;
-  }
-
-  .cifra-line {
-    display: block;
-    white-space: nowrap;
-    break-inside: avoid;
-    margin-bottom: 0;
-  }
-
-  .pair {
-    display: inline-block;
-    vertical-align: bottom;
-  }
-
-  .chord-span {
-    display: block;
-    min-height: 1.15em;
-    line-height: 1.15;
-    white-space: pre;
-  }
-
-  .lyric-span {
-    display: block;
-    white-space: pre;
-    line-height: 1.35;
+  .cifra-wrap {
+    position: relative;
   }
 </style>

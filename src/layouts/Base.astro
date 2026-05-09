@@ -4,9 +4,10 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
+  wide?: boolean;
 }
 
-const { title, description = 'Catálogo de repertório de violão' } = Astro.props;
+const { title, description = 'Catálogo de repertório de violão', wide = false } = Astro.props;
 const base = import.meta.env.BASE_URL;
 ---
 
@@ -18,28 +19,113 @@ const base = import.meta.env.BASE_URL;
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
     <title>{title} — Guitar Master</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <script is:inline>
+      // Aplicar tema antes do primeiro paint pra evitar flash
+      (function () {
+        try {
+          var t = localStorage.getItem('gm:theme');
+          if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="min-h-screen bg-gray-50 text-gray-900">
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-40">
-      <nav class="max-w-6xl mx-auto px-4 h-12 flex items-center gap-6">
-        <a href={base} class="font-bold text-gray-900 hover:text-blue-600 transition-colors">
-          🎸 Guitar Master
-        </a>
-        <a href={`${base}progresso`} class="text-sm text-gray-600 hover:text-blue-600 transition-colors">
-          Progresso
-        </a>
-        <a href={`${base}plano`} class="text-sm text-gray-600 hover:text-blue-600 transition-colors">
-          Plano
-        </a>
+  <body class="min-h-screen">
+    <header class="site-header">
+      <nav class:list={['site-nav mx-auto px-4', wide ? 'max-w-screen-2xl' : 'max-w-6xl']}>
+        <a href={base} class="brand">🎸 Guitar Master</a>
+        <a href={`${base}progresso`} class="navlink">Progresso</a>
+        <a href={`${base}plano`} class="navlink">Plano</a>
+        <button id="theme-toggle" class="btn btn-icon" type="button" aria-label="Alternar tema" title="Alternar tema">
+          <span id="theme-icon">☾</span>
+        </button>
       </nav>
     </header>
 
-    <main class="max-w-6xl mx-auto px-4 py-8">
+    <main class:list={['mx-auto px-4 py-8', wide ? 'max-w-screen-2xl' : 'max-w-6xl']}>
       <slot />
     </main>
 
-    <footer class="border-t border-gray-100 mt-16 py-6 text-center text-xs text-gray-400">
+    <footer class="site-footer">
       Guitar Master · {new Date().getFullYear()}
     </footer>
+
+    <script>
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const icon = document.getElementById('theme-icon');
+
+      function syncIcon() {
+        if (icon) icon.textContent = root.getAttribute('data-theme') === 'dark' ? '☀' : '☾';
+      }
+      syncIcon();
+
+      btn?.addEventListener('click', () => {
+        const isDark = root.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+          root.removeAttribute('data-theme');
+          localStorage.setItem('gm:theme', 'light');
+        } else {
+          root.setAttribute('data-theme', 'dark');
+          localStorage.setItem('gm:theme', 'dark');
+        }
+        syncIcon();
+      });
+    </script>
+
+    <style>
+      .site-header {
+        background: color-mix(in srgb, var(--bg-tint) 90%, transparent);
+        border-bottom: 1px solid var(--paper-line);
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        backdrop-filter: blur(8px);
+      }
+      .site-nav {
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+      .brand {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 1.15rem;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .brand:hover { color: var(--accent); }
+      .navlink {
+        font-family: var(--font-serif);
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+        text-decoration: none;
+        transition: color 0.15s;
+      }
+      .navlink:hover { color: var(--accent); }
+      .btn-icon {
+        margin-left: auto;
+        min-width: 2.2rem;
+        font-size: 1rem;
+      }
+      .site-footer {
+        text-align: center;
+        font-style: italic;
+        font-size: 0.85rem;
+        color: var(--ink-soft);
+        opacity: 0.7;
+        padding: 1.5rem 1rem 2.5rem;
+        margin-top: 3rem;
+        border-top: 1px solid var(--paper-line);
+      }
+    </style>
   </body>
 </html>

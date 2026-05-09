@@ -11,38 +11,104 @@ const rendered = await Promise.all(
 ---
 
 <Base title="Plano de Estudos">
-  <div class="mb-8">
-    <h1 class="text-2xl font-bold text-gray-900">Plano de Estudos</h1>
-    <p class="text-sm text-gray-500 mt-1">Marque seu progresso — salvo automaticamente</p>
+  <div class="page-head">
+    <h1 class="page-title">Plano de Estudos</h1>
+    <p class="page-sub">Marque seu progresso — salvo automaticamente</p>
   </div>
 
-  <div class="space-y-6">
+  <div class="fases">
     {rendered.map(({ data, id, html }) => {
       const { Content } = html;
       return (
-        <div
-          class="bg-white border border-gray-200 rounded-xl p-6 prose prose-sm max-w-none"
-          data-fase-id={id}
-        >
-          <div class="flex items-center gap-3 mb-4 not-prose">
-            <span class="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
-              Fase {data.fase}
-            </span>
-            {data.duracao && (
-              <span class="text-xs text-gray-400">{data.duracao}</span>
-            )}
+        <article class="paper-card fase prose-cifra" data-fase-id={id}>
+          <header class="fase-head">
+            <span class="meta-badge">Fase {data.fase}</span>
+            {data.duracao && <span class="fase-dur">{data.duracao}</span>}
+          </header>
+          <div class="fase-body">
+            <Content />
           </div>
-          <Content />
-        </div>
+        </article>
       );
     })}
   </div>
 </Base>
 
+<style>
+  .page-head { margin-bottom: 2rem; }
+  .page-title {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .page-sub { font-style: italic; color: var(--ink-soft); font-size: 0.95rem; }
+
+  .fases {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+  .fase {
+    padding: 1.4rem 1.6rem 1.6rem;
+  }
+  .fase-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.8rem;
+  }
+  .fase-dur {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  .fase-body :global(h2),
+  .fase-body :global(h3) {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--ink);
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .fase-body :global(h2) { font-size: 1.4rem; }
+  .fase-body :global(h3) { font-size: 1.15rem; }
+  .fase-body :global(p) {
+    font-family: var(--font-serif);
+    color: var(--ink);
+    line-height: 1.55;
+    margin-bottom: 0.6rem;
+  }
+  .fase-body :global(strong) { color: var(--accent); font-weight: 700; }
+  .fase-body :global(ul) {
+    list-style: none;
+    padding-left: 0;
+    margin: 0.4rem 0 0.8rem;
+  }
+  .fase-body :global(li) {
+    font-family: var(--font-serif);
+    line-height: 1.5;
+    margin-bottom: 0.25rem;
+    color: var(--ink);
+  }
+  .fase-body :global(li:has(input[type="checkbox"])) {
+    padding-left: 0;
+  }
+  .fase-body :global(input[type="checkbox"]) {
+    accent-color: var(--accent);
+    margin-right: 0.5rem;
+    cursor: pointer;
+    transform: translateY(1px);
+  }
+</style>
+
 <script>
   const PREFIX = 'gm:plano:';
 
-  // Remove `disabled` from checkboxes and restore saved state
   document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((cb, i) => {
     const key = `${PREFIX}${i}`;
     cb.disabled = false;
@@ -52,17 +118,3 @@ const rendered = await Promise.all(
     });
   });
 </script>
-
-<style>
-  /* Style checkboxes in the prose content */
-  :global(.prose input[type="checkbox"]) {
-    accent-color: #2563eb;
-    margin-right: 0.4em;
-    cursor: pointer;
-  }
-
-  :global(.prose li:has(input[type="checkbox"])) {
-    list-style: none;
-    margin-left: -1.5em;
-  }
-</style>
