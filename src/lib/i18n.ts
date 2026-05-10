@@ -1,6 +1,6 @@
 export const LANG_KEY = 'gm:lang';
 export type Lang = 'en' | 'pt';
-export const DEFAULT_LANG: Lang = 'en';
+export const DEFAULT_LANG: Lang = 'pt';
 
 export const TRANSLATIONS = {
   en: {

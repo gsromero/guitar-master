@@ -7,10 +7,10 @@ interface Props {
 const { status, class: cls } = Astro.props;
 
 const config = {
-  toca_bem:         { emoji: '🟢', label: 'Plays well',  key: 'status_toca_bem' },
-  toca_parcial:     { emoji: '🟡', label: 'Partial',     key: 'status_parcial' },
-  wishlist:         { emoji: '🔴', label: 'Wishlist',    key: 'status_wishlist' },
-  nao_classificado: { emoji: '⚪', label: 'No status',   key: 'status_sem_status' },
+  toca_bem:         { emoji: '🟢', label: 'Toco bem',   key: 'status_toca_bem' },
+  toca_parcial:     { emoji: '🟡', label: 'Parcial',    key: 'status_parcial' },
+  wishlist:         { emoji: '🔴', label: 'Wishlist',   key: 'status_wishlist' },
+  nao_classificado: { emoji: '⚪', label: 'Sem status', key: 'status_sem_status' },
 } as const;
 
 const { emoji, label, key } = config[status];

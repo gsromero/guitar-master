@@ -7,27 +7,27 @@ const { artistas } = Astro.props;
 
 const niveis = ['N1', 'N2', 'N3', 'N4', 'N5'];
 const statuses = [
-  { value: 'toca_bem',         i18nKey: 'status_filter_plays_well', label: '🟢 Plays well' },
-  { value: 'toca_parcial',     i18nKey: 'status_filter_partial',    label: '🟡 Partial' },
+  { value: 'toca_bem',         i18nKey: 'status_filter_plays_well', label: '🟢 Toco bem' },
+  { value: 'toca_parcial',     i18nKey: 'status_filter_partial',    label: '🟡 Parcial' },
   { value: 'wishlist',         i18nKey: 'status_filter_wishlist',   label: '🔴 Wishlist' },
-  { value: 'nao_classificado', i18nKey: 'status_filter_no_status',  label: '⚪ No status' },
+  { value: 'nao_classificado', i18nKey: 'status_filter_no_status',  label: '⚪ Sem status' },
 ];
 ---
 
 <div class="controls filtros">
   <div class="ctrl-group">
-    <span class="ctrl-label" data-i18n="filter_search">Search</span>
+    <span class="ctrl-label" data-i18n="filter_search">Busca</span>
     <input
       id="filtro-busca"
       type="search"
-      placeholder="Title or artist…"
+      placeholder="Título ou artista…"
       data-i18n-placeholder="filter_search_placeholder"
       class="input filtro-busca-input"
     />
   </div>
 
   <div class="ctrl-group">
-    <span class="ctrl-label" data-i18n="filter_level">Level</span>
+    <span class="ctrl-label" data-i18n="filter_level">Nível</span>
     <div class="btn-row">
       {niveis.map(n => (
         <button class="btn filtro-nivel" data-nivel={n} aria-pressed="false" type="button">{n}</button>
@@ -45,14 +45,14 @@ const statuses = [
   </div>
 
   <div class="ctrl-group">
-    <span class="ctrl-label" data-i18n="filter_artist">Artist</span>
+    <span class="ctrl-label" data-i18n="filter_artist">Artista</span>
     <select id="filtro-artista" class="input">
-      <option value="" data-i18n="filter_all">All</option>
+      <option value="" data-i18n="filter_all">Todos</option>
       {artistas.sort((a, b) => a.localeCompare(b, 'pt')).map(a => <option value={a}>{a}</option>)}
     </select>
   </div>
 
-  <button id="filtro-limpar" class="btn btn-ghost" type="button" data-i18n="filter_clear">Clear</button>
+  <button id="filtro-limpar" class="btn btn-ghost" type="button" data-i18n="filter_clear">Limpar</button>
 
   <span id="filtro-count" class="ctrl-label filtro-count"></span>
 </div>
